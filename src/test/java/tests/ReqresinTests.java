@@ -1,103 +1,66 @@
 package tests;
 
+import lombok.UserData;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
-import static io.restassured.http.ContentType.JSON;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static specs.Specs.*;
 
 public class ReqresinTests {
 
     @Test
-    void successfulLoginTest() {
-        String body = "{\n" +
-                "    \"email\": \"eve.holt@reqres.in\",\n" +
-                "    \"password\": \"cityslicka\"\n" +
-                "}";
+    @DisplayName("Get list of users")
+    public void getListOfUsers() {
+        int perPage = 5;
 
         given()
-                .log().uri()
-                .body(body)
-                .contentType(JSON)
+                .spec(request)
                 .when()
-                .post("https://reqres.in/api/login")
+                .get("/users/?per_page=" + perPage)
                 .then()
+                .spec(responseOk)
                 .log().body()
-                .statusCode(200)
-                .body("token", is("QpwL5tke4Pnpja7X4"));
+                .assertThat()
+                .body("data.findAll{it.email =~/.*?@reqres.in/}.email.flatten()",
+                        hasItem("emma.wong@reqres.in"))
+                .and()
+                .body("data.last_name[2]", equalTo("Wong"))
+                .and()
+                .body("data.findAll{it.last_name =~/^\\w{1,10}$/}.last_name.flatten()",
+                        hasSize(perPage));
+    }
+
+
+    @Test
+    @DisplayName("Successfully delete user")
+    public void deleteUser() {
+        int userId = 5;
+
+        given()
+                .spec(request)
+                .when()
+                .delete("/users/" + userId)
+                .then()
+                .spec(responseNoContent)
+                .log().body();
     }
 
     @Test
-    void unsuccessfulLoginWithMissingEmailTest() {
-        String body = "{\"password\": \"cityslicka\"}";
+    @DisplayName("Get user's info")
+    void checkSingleUser() {
+        UserData data =
+                given()
+                        .spec(request)
+                        .when()
+                        .get("/users/2")
+                        .then()
+                        .spec(responseOk)
+                        .extract().as(UserData.class);
 
-        given()
-                .log().uri()
-                .body(body)
-                .contentType(JSON)
-                .when()
-                .post("https://reqres.in/api/login")
-                .then()
-                .log().body()
-                .statusCode(400)
-                .body("error", is("Missing email or username"));
-    }
-
-    @Test
-    void unsuccessfulLoginWithMissingPasswordTest() {
-        String body = "{\"email\": \"eve.holt@reqres.in\"}";
-
-        given()
-                .log().uri()
-                .body(body)
-                .contentType(JSON)
-                .when()
-                .post("https://reqres.in/api/login")
-                .then()
-                .log().body()
-                .statusCode(400)
-                .body("error", is("Missing password"));
-    }
-
-    @Test
-    void checkNonExistentUser(){
-
-        String body = "{ \"name\": \"John Wick\", \"id : 4 }";
-
-        given()
-                .body(body)
-                .contentType(JSON)
-                .log().body()
-                .when()
-                .patch("https://reqres.in/api/users/2")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(400);
-    }
-
-    @Test
-    void changeMorpheusJobTest(){
-
-        String body = "{ \"name\": \"John Wick\", \"job\": \"QA automation engineer\" }";
-
-        String expectedJob = "QA automation engineer";
-
-        String actualJob = given()
-                .body(body)
-                .contentType(JSON)
-                .log().uri()
-                .log().body()
-                .when()
-                .put("https://reqres.in/api/users/2")
-                .then()
-                .log().status()
-                .log().body()
-                .statusCode(200)
-                .extract().path("job");
-
-        assertEquals(expectedJob, actualJob);
-
+                assertEquals(2, data.getUser().getId());
+                assertEquals("janet.weaver@reqres.in", data.getUser().getEmail());
     }
 }
